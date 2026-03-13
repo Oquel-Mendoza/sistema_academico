@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema de Gestión Académica</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-window">
+      <header class="titlebar">
+        <div class="titlebar-left">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <h1>Sistema de Gestión Académica</h1>
+        </div>
+        <div class="titlebar-right">
+          <button id="toggleTheme" class="btn ghost">Modo oscuro</button>
+          <button id="exportData" class="btn">Exportar JSON</button>
+          <label for="importFile" class="btn">Importar JSON</label>
+          <input id="importFile" type="file" accept="application/json" hidden />
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <button class="nav-item active" data-tab="alumnos">Alumnos</button>
+        <button class="nav-item" data-tab="carreras">Carreras</button>
+        <button class="nav-item" data-tab="periodos">Periodos</button>
+        <button class="nav-item" data-tab="clases">Clases</button>
+        <button class="nav-item" data-tab="matriculas">Matrículas</button>
+      </aside>
+
+      <main class="content">
+        <section class="toolbar">
+          <input id="searchInput" type="text" placeholder="Buscar en módulo actual..." />
+          <select id="yearFilter">
+            <option value="">Todos los años</option>
+          </select>
+          <select id="careerFilter">
+            <option value="">Todas las carreras</option>
+          </select>
+          <button id="newRecord" class="btn primary">Nuevo registro</button>
+        </section>
+
+        <section class="cards" id="metrics"></section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2 id="panelTitle">Alumnos</h2>
+            <span id="pageInfo"></span>
+          </div>
+          <div id="skeleton" class="skeleton hidden"></div>
+          <table>
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+          <div class="pagination">
+            <button id="prevPage" class="btn ghost">Anterior</button>
+            <button id="nextPage" class="btn ghost">Siguiente</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">Nuevo registro</h3>
+          <button id="closeModal" class="btn ghost">✕</button>
+        </div>
+        <form id="dynamicForm"></form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
