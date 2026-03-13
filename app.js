@@ -17,7 +17,7 @@ const ui = {
 };
 
 const schema = {
-  alumnos: ['nombre', 'documento', 'correo'],
+  alumnos: ['nombre', 'documento', 'correo', 'carreraId'],
   carreras: ['nombre', 'codigo', 'duracion'],
   periodos: ['nombre', 'anio'],
   clases: ['codigo', 'nombre', 'carreraId', 'periodoId', 'cupo']
@@ -250,32 +250,39 @@ function saveForm(formData) {
 function removeRecord(id) {
   const tab = state.tab;
 
-  if (tab === 'carreras' && state.db.clases.some(c => c.carreraId === id)) {
-    return toast('No se puede eliminar: carrera con clases activas', true);
+  if (tab === 'alumnos' && state.db.matriculas.some(m => m.alumnoId === id)) {
+    return toast('No se puede eliminar: alumno con matrículas activas', true);
+  }
+
+  if (tab === 'carreras' && (state.db.clases.some(c => c.carreraId === id) || state.db.alumnos.some(a => a.carreraId === id))) {
+    return toast('No se puede eliminar: carrera con alumnos o clases activas', true);
   }
   if (tab === 'periodos' && (state.db.clases.some(c => c.periodoId === id) || state.db.matriculas.some(m => m.periodoId === id))) {
     return toast('No se puede eliminar: periodo con dependencias', true);
   }
+  if (tab === 'clases' && state.db.matriculas.some(m => m.claseId === id)) {
+    return toast('No se puede eliminar: clase con matrículas activas', true);
+  }
 
   state.db[tab] = state.db[tab].filter(r => r.id !== id);
-  if (tab === 'clases') state.db.matriculas = state.db.matriculas.filter(m => m.claseId !== id);
 
   toast('Registro eliminado');
   persistAndRefresh();
 }
 
 function renderMatriculas() {
-  ui.tableHead.innerHTML = '<tr><th>Alumno</th><th>Clase</th><th>Periodo</th><th>Acciones</th></tr>';
+  ui.tableHead.innerHTML = '<tr><th>Alumno</th><th>Carrera</th><th>Clase</th><th>Periodo</th><th>Acciones</th></tr>';
   ui.pageInfo.textContent = `${state.db.matriculas.length} matrícula(s)`;
 
   const rows = state.db.matriculas.map(m => {
     const alumno = state.db.alumnos.find(a => a.id === m.alumnoId)?.nombre || '-';
     const clase = state.db.clases.find(c => c.id === m.claseId)?.nombre || '-';
     const periodo = state.db.periodos.find(p => p.id === m.periodoId)?.nombre || '-';
-    return `<tr><td>${alumno}</td><td>${clase}</td><td>${periodo}</td><td><button class="btn ghost" data-del-mat="${m.id}">Eliminar</button></td></tr>`;
+    const carrera = state.db.carreras.find(c => c.id === m.carreraId)?.nombre || '-';
+    return `<tr><td>${alumno}</td><td>${carrera}</td><td>${clase}</td><td>${periodo}</td><td><button class="btn ghost" data-del-mat="${m.id}">Eliminar</button></td></tr>`;
   }).join('');
 
-  ui.tableBody.innerHTML = rows || '<tr><td colspan="4">Sin matrículas</td></tr>';
+  ui.tableBody.innerHTML = rows || '<tr><td colspan="5">Sin matrículas</td></tr>';
   document.querySelectorAll('[data-del-mat]').forEach(btn => {
     btn.addEventListener('click', () => {
       state.db.matriculas = state.db.matriculas.filter(m => m.id !== btn.dataset.delMat);
@@ -286,22 +293,67 @@ function renderMatriculas() {
 }
 
 function openEnrollmentModal() {
+  if (!state.db.alumnos.length || !state.db.clases.length) {
+    toast('Necesitas al menos un alumno y una clase para matricular', true);
+    return;
+  }
+
   ui.modalTitle.textContent = 'Nueva matrícula';
   ui.dynamicForm.innerHTML = `
     <div class="form-row"><label>Alumno</label><select name="alumnoId" required>
       <option value="">Seleccione...</option>${state.db.alumnos.map(a => `<option value="${a.id}">${a.nombre}</option>`).join('')}
     </select></div>
+    <div class="form-row"><label>Periodo</label><select name="periodoId" required>
+      <option value="">Seleccione...</option>${state.db.periodos.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}
+    </select></div>
     <div class="form-row"><label>Clase</label><select name="claseId" required>
-      <option value="">Seleccione...</option>${state.db.clases.map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('')}
+      <option value="">Seleccione alumno y periodo...</option>
     </select></div>
     <button class="btn primary" type="submit">Matricular</button>
   `;
 
+  const alumnoSelect = ui.dynamicForm.querySelector('[name="alumnoId"]');
+  const periodoSelect = ui.dynamicForm.querySelector('[name="periodoId"]');
+  const claseSelect = ui.dynamicForm.querySelector('[name="claseId"]');
+
+  const updateClassOptions = () => {
+    const alumno = state.db.alumnos.find(a => a.id === alumnoSelect.value);
+    const periodoId = periodoSelect.value;
+    if (!alumno || !alumno.carreraId || !periodoId) {
+      claseSelect.innerHTML = '<option value="">Seleccione alumno y periodo...</option>';
+      return;
+    }
+
+    const classes = state.db.clases.filter(c => c.carreraId === alumno.carreraId && c.periodoId === periodoId);
+    claseSelect.innerHTML = '<option value="">Seleccione...</option>' +
+      classes.map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
+
+    if (!classes.length) {
+      claseSelect.innerHTML = '<option value="">Sin clases disponibles para esta combinación</option>';
+    }
+  };
+
+  alumnoSelect.addEventListener('change', updateClassOptions);
+  periodoSelect.addEventListener('change', updateClassOptions);
+
   ui.dynamicForm.onsubmit = e => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(ui.dynamicForm).entries());
+    const alumno = state.db.alumnos.find(a => a.id === data.alumnoId);
     const clase = state.db.clases.find(c => c.id === data.claseId);
-    if (!clase) return;
+    if (!alumno || !clase) return;
+
+    if (!alumno.carreraId) {
+      return toast('El alumno debe tener una carrera asignada', true);
+    }
+
+    if (alumno.carreraId !== clase.carreraId) {
+      return toast('El alumno solo puede matricular clases de su carrera', true);
+    }
+
+    if (data.periodoId !== clase.periodoId) {
+      return toast('La clase seleccionada no pertenece al periodo indicado', true);
+    }
 
     const ocupadas = state.db.matriculas.filter(m => m.claseId === data.claseId).length;
     if (ocupadas >= Number(clase.cupo)) return toast('Clase sin cupos disponibles', true);
@@ -310,7 +362,7 @@ function openEnrollmentModal() {
       return toast('El alumno ya está matriculado en este periodo', true);
     }
 
-    state.db.matriculas.push({ id: uid(), ...data, periodoId: clase.periodoId });
+    state.db.matriculas.push({ id: uid(), ...data, carreraId: alumno.carreraId });
     toast('Matrícula registrada');
     persistAndRefresh();
     closeModal();
@@ -330,7 +382,8 @@ function renderMetrics() {
     ['Carreras', state.db.carreras.length],
     ['Clases', state.db.clases.length],
     ['Matrículas', state.db.matriculas.length],
-    ['Cupos libres', availableSeats]
+    ['Cupos libres', availableSeats],
+    ['Ocupación', `${state.db.matriculas.length}/${state.db.clases.reduce((acc, c) => acc + Number(c.cupo || 0), 0)}`]
   ];
 
   ui.metrics.innerHTML = cards.map(([label, value]) => `<article class="card"><h4>${label}</h4><p>${value}</p></article>`).join('');
